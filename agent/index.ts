@@ -23,27 +23,22 @@
 
 // @ts-nocheck
 
+export const currentFrame: NativePointer = Memory.alloc(4);
+
+import { runFrameCModule } from "./cfunctions";
 import { log } from "./logger";
+import { bannedIPsArray, GAME_DLL, ipKey, MAX_INFO_STRING, qTrue, rateKey, snapsKey, SV_TICKRATE } from "./settings";
+import { SITHagent_timenudgeValidation, SITHagent_sendServerChatMessage } from "./sithagent";
 
-const GAME_DLL = "jampgamei386.so";
-const fs = require('frida-fs');
-
-const qTrue: number = 1;
-const MAX_INFO_STRING: number = 1023;
-const SV_TICKRATE: number = 20;
-const ipKey: NativePointer = Memory.allocUtf8String("ip");
-const snapsKey: NativePointer = Memory.allocUtf8String("snaps");
-const rateKey: NativePointer = Memory.allocUtf8String("rate");
-
-let modules: Module[] = Process.enumerateModules();
+const modules: Module[] = Process.enumerateModules();
 let jampgame_exports: ModuleExportDetails[] = [];
 let clientList: boolean[] = [];
 let hookedFunctions: InvocationListener[] = [];
 
 // native functions
-let InfoValueforKey: NativeFunction;
+export let InfoValueforKey: NativeFunction;
 let getUserInfo: NativeFunction;
-let trap_SendConsoleCommand: NativeFunction;
+export let trap_SendConsoleCommand: NativeFunction;
 // fpointers
 let ClientConnectPtr: NativePointer;
 let GsayPtr: NativePointer;
@@ -56,51 +51,6 @@ let GShutdownGamePtr: NativePointer;
 // We need qboolean G_FilterPacket(char *) to make bans work without having any
 // heavy impact on the whole ClientConnect function.
 let G_FilterPacketPtr: NativePointer;
-
-// Load banned hosts.
-const bannedIpsData = fs.readFileSync('/home/jedi/bans.dat');
-const bannedIPsArray = bannedIpsData.toString().split('\n');
-
-function SITHagent_userInfoValidation(userInfoPtr: NativePointer): boolean {
-  if (InfoValueforKey(userInfoPtr, snapsKey).toString() != "25000") {
-    return false;
-  }
-  if (InfoValueforKey(userInfoPtr, rateKey).toString() != SV_TICKRATE.toString()) {
-    return false;
-  }
-  return true;
-}
-
-const highPingCompensation: number = SV_TICKRATE;
-function SITHagent_timenudgeValidation(cmdTime: number, currentFrame: number, ping: number): { timenudge: number, bogusTimenudge: boolean } {
-  let timenudge: number;
-  if (ping > 50) {
-    timenudge = ((cmdTime - currentFrame) + ping - highPingCompensation + (1000 / SV_TICKRATE)) * -1;
-  } else {
-    timenudge = ((cmdTime - currentFrame) + ping + (1000 / SV_TICKRATE)) * -1;
-  }
-  let bogusTimenudge: boolean = timenudge >= ping || timenudge < -7;
-  return { timenudge, bogusTimenudge }
-
-}
-
-function SITHagent_sendServerChatMessage(message: string): void {
-  const serverMessageString = Memory.allocUtf8String("\"" + message + "\n\"");
-  trap_SendConsoleCommand(0, serverMessageString);
-}
-
-const currentFrame: NativePointer = Memory.alloc(4);
-
-let runFrameCModule: CModule = new CModule(`
-    #include <gum/guminterceptor.h>
-
-    extern int currentFrame;
-
-    void onEnter (GumInvocationContext *ic) 
-    {
-      currentFrame = (int)gum_invocation_context_get_nth_argument(ic, 0);
-    }
-`, { currentFrame });
 
 // Get jampgamei386 fpointers.
 modules.forEach(function (value) {
@@ -215,20 +165,11 @@ class ClientUserInfoChanged {
   }
 }
 
-/* TODO+ completely replace by cmodule
-let levelTime: number = 0;
-class G_RunFrame {
-  onEnter (args:NativePointer[]) {
-    levelTime = args[0].toInt32();
-  }
-}
-*/
 class PlayerDie {
 
   killer_clientNum: number = -1;
   killer_cmdTime: number = 0;
   killer_clientPing: number = 999;
-  localLevelTime: number;
   onEnter(args: NativePointer[]) {
     this.killer_clientNum = args[2].readInt();
     log('player_die()');
@@ -298,7 +239,7 @@ class GSay {
 class GShutDownGame {
   onLeave() {
     setTimeout(hookJampgameExports, 3000);
-    log("reload");
+    log("Reloading hooks.");
   }
 }
 
@@ -371,7 +312,6 @@ function hookJampgameExports() {
   });
 
 }
-
 
 // initial hook.
 hookJampgameExports();
