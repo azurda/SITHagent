@@ -61,14 +61,6 @@ let G_FilterPacketPtr: NativePointer;
 const bannedIpsData = fs.readFileSync('/home/jedi/bans.dat');
 const bannedIPsArray = bannedIpsData.toString().split('\n');
 
-
-function SITHagent_timenudgeValidation(timenudge: number, ping: number): boolean {
-  if (Math.sign(timenudge) < 0) {
-    return true;
-  }
-  return false;
-}
-
 function SITHagent_userInfoValidation(userInfoPtr: NativePointer): boolean {
   if (InfoValueforKey(userInfoPtr, snapsKey).toString() != "25000") {
     return false;
@@ -79,8 +71,7 @@ function SITHagent_userInfoValidation(userInfoPtr: NativePointer): boolean {
   return true;
 }
 
-
-const highPingCompensation: number = 20;
+const highPingCompensation: number = SV_TICKRATE;
 function SITHagent_timenudgeValidation(cmdTime: number, currentFrame: number, ping: number): { timenudge: number, bogusTimenudge: boolean } {
   let timenudge: number;
   if (ping > 50) {
@@ -224,7 +215,6 @@ class ClientUserInfoChanged {
   }
 }
 
-
 /* TODO+ completely replace by cmodule
 let levelTime: number = 0;
 class G_RunFrame {
@@ -251,7 +241,6 @@ class PlayerDie {
 
     log("\tping: " + this.killer_clientPing);
     log("\tcmdTime:" + this.killer_cmdTime);
-    //log("\tlevelTime: " + levelTime);
     log("\tlevelTime: " + currentFrame.readInt());
   }
 
